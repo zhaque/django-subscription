@@ -1,0 +1,134 @@
+# -*- org -*-
+
+#+TITLE:     Django Subscription
+#+AUTHOR:    Maciej Pasternacki
+#+EMAIL:     maciej@pasternacki.net
+#+LANGUAGE:  en
+#+OPTIONS:   H:3 num:t toc:t \n:nil @:t ::t |:t ^:t -:t f:t *:t TeX:t LaTeX:t skip:nil d:nil tags:not-in-toc
+
+Django-subscription is an application for handling PayPal-based pay
+subscriptions. Module does not handle explicit permissions; instead,
+subscribed user are automatically added to predefined groups using
+=django.contrib.auth= application. It needs django-paypal application
+available at http://github.com/johnboxall/django-paypal/ for handling
+payments.
+
+* Installation
+  Copy or symlink =subscription/= directory on Python path (=setup.py=
+  script for automated installation will be supplied later on). Module
+  contents are available in the =subscription= module.
+* Models
+  Two models defined by the application are available in the
+  =subscription.models= module.
+** Subscription
+   Main model used by the application is =Subscription=.  It
+   represents a single subscription available for users.  Subscription
+   has following fields:
+   - =name= - short name
+   - =description= - longer description
+   - =price= - subscription price
+   - =recurrence_period= - PayPal subscription recurrence period (used
+     only if =recurrence_unit= is not =None=)
+   - =recurrence_unit= - in what units is recurrence period expressed:
+     - D for days
+     - W for weeks
+     - M for months
+     - Y for years
+     - None (NULL) for one-time (non-recurring) payment
+   - =group= - one to one relation to
+     =django.contrib.auth.models.Group=.  Subscription is identified
+     by the group.
+** Transaction
+   =Transaction= model is mostly read-only and is used to view
+   subscription-related events in the admin panel. It has following
+   fields:
+   - =timestamp= - date and time of event
+   - =subscription= - foreign key of =Subscription= model that event
+     was related to
+   - =user= - foreign key of =django.contrib.auth.models.User= model
+     that event was related to
+   - =ipn= - foreign key of =paypal.standard.ipn.models.PayPalIPN=
+     model identifying payment callback related to event
+   - =event= - type of event, one of:
+     - one-time payment
+     - subscription payment
+     - unexpected payment
+     - payment flagged
+     - subscribed
+     - unexpected subscription
+     - cancel subscription
+     - unexpected cancel
+     - expired subscription
+     - unexpected expiration
+     - modify subscription
+     The "unexpected" events are ones that could not be related to any
+     specific user/subscription pair.
+   - =amount= - amount (=mc_gross=) of =ipn=
+   - =comment= - site admin's comment, only field intended to be
+     modified.
+   In admin panel's =Transaction= object list, fields =subscription=,
+   =user=, =ipn= are links to related modes instance's admin forms.
+** User
+   This application adds =get_subscription()= method to
+   =django.contrib.auth.models.User= class.  This method returns
+   subscription of current user, or =None= if user has not subscribed
+   to anything.
+* Signals
+  On subscription-related events, the application sends signals that
+  project code can connect to and do some site-specific things (e.g.
+  send a nice e-mail to user).  Signals are available in
+  =subscription.signals= package.  All signals have =Subscription=
+  instance (or, in extreme cases with =event= signal, =None=) as
+  sender, and have arguments =ipn=
+  (=paypal.standard.ipn.models.PayPalIPN= model instance), =user=
+  (=django.contrib.auth.models.User= instance), =subscription=
+  (=Subscription= instance or None, same as sender).  Signals are:
+  - =signed_up= - user signed up for one-time payment,
+  - =subscribed= - user subscribed
+  - =unsubscribed= - user unsubscribed from PayPal
+  - =paid= - payment received from a subscription
+  - =event= - other strange event, receives additional =event=
+    argument, which may be
+    - =unexpected_payment=
+    - =flagged=
+    - =unexpected_subscription=
+    - =unexpected_cancel=
+    - =unexpected_expiration=
+    - =subscription_modify=
+* Views
+  Views are available in =subscription.views= module
+  - =subscription_list= lists available subscription using
+    =subscription/subscription_list.html= template
+  - =subscription_detail= presents details of the selected
+    subscription (login is required for this view)
+* URLs
+  Module =subscription.urls= configures default urls for module.  This
+  are:
+  - root URL displays =subscription_list= view
+  - /id/ (numeric ID) displays =subscription_detail= view for
+    Subscription with ID /id/
+  - =paypal/= is PayPal IPN URL
+  - =done/= displays =subscription/subscription_done.html= template
+    and is where successful PayPal transactions are redirected
+  - =cancel/= displays =subscription/subscription_cancel.html=
+    template and is where cancelled PayPal transactions are redirected
+* Templates
+  Templates =subscription/subscription_done.html= and
+  =subscription/subscription_cancel.html= receive no context.
+
+  Template =subscription/subscription_list.html= receives
+  =object_list= variable which is a list of objects.  List element's
+  =subscription= attribute contains a =Subscription= object, and
+  =form= attribute contains PayPal form for this object.
+
+  Template =subscription/subscription_detail.html= receives =object=
+  variable which is a =Subscription= object, and =form= variable which
+  is a PayPal form for the =object=.
+* Example code
+  Example usage and templates are available as =django-saas-kit=
+  project at http://github.com/CrowdSense/django-saas-kit/
+* Bugs and omissions
+  - There is no =setup.py= script for automated installation.
+  - No support for changing (upgrading/downgrading) subscription by
+    user; received payments for subscription from already
+    subscribed users have undefined consequences.
