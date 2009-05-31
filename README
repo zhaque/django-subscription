@@ -168,3 +168,6 @@ Table of Contents
   - No support for changing (upgrading/downgrading) subscription by
     user; received payments for subscription from already
     subscribed users have undefined consequences.
+
+* Dual licensed under the MIT (MIT-LICENSE.txt)
+* and GPL (GPL-LICENSE.txt) licenses.
