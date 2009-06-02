@@ -1,7 +1,5 @@
 from django.conf.urls.defaults import *
 
-from models import Subscription
-
 urlpatterns = patterns('subscription.views',
     (r'^$', 'subscription_list', {}, 'subscription_list'),
     (r'^(?P<object_id>\d+)/$', 'subscription_detail', {}, 'subscription_detail'),

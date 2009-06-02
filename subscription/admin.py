@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.core.urlresolvers import reverse
 from django.utils.html import conditional_escape as esc
 
 from models import Subscription, Transaction
