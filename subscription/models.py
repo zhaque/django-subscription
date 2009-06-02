@@ -20,7 +20,7 @@ class Transaction(models.Model):
 class Subscription(models.Model):
     name = models.CharField(max_length=100, unique=True, null=False)
     description = models.TextField(blank=True)
-    price = models.DecimalField(max_digits=4, decimal_places=2)
+    price = models.DecimalField(max_digits=64, decimal_places=2)
     recurrence_period = models.PositiveIntegerField(null=True, blank=True)
     recurrence_unit = models.CharField(max_length=1, null=True,
                                        choices = ((None, "No recurrence"),
