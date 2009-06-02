@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/05/30 23:41:14
+Date: 2009/06/02 23:43:48
 
 
 
@@ -16,16 +16,19 @@ payments.
 Table of Contents
 =================
 1 Installation
-2 Models
-    2.1 Subscription
-    2.2 Transaction
-    2.3 User
-3 Signals
-4 Views
-5 URLs
-6 Templates
-7 Example code
-8 Bugs and omissions
+2 Settings
+3 Models
+    3.1 Subscription
+    3.2 Transaction
+    3.3 User
+4 Signals
+5 Views
+6 URLs
+7 Templates
+8 Example code
+9 Bugs and omissions
+    9.1 Plans
+10 License
 
 
 1 Installation
@@ -34,12 +37,19 @@ Table of Contents
   script for automated installation will be supplied later on). Module
   contents are available in the `subscription' module.
 
-2 Models
+2 Settings
+~~~~~~~~~~
+  In project's `settings.py' file `SUBSCRIPTION_PAYPAL_SETTINGS'
+  should be set to a dictionary with default PayPal button settings,
+  as described in django-paypal documentation. At least the `business'
+  key should be set to your PayPal business e-mail.
+
+3 Models
 ~~~~~~~~
   Two models defined by the application are available in the
   `subscription.models' module.
 
-2.1 Subscription
+3.1 Subscription
 ================
    Main model used by the application is `Subscription'.  It
    represents a single subscription available for users.  Subscription
@@ -59,7 +69,7 @@ Table of Contents
      `django.contrib.auth.models.Group'.  Subscription is identified
      by the group.
 
-2.2 Transaction
+3.2 Transaction
 ===============
    `Transaction' model is mostly read-only and is used to view
    subscription-related events in the admin panel. It has following
@@ -91,14 +101,14 @@ Table of Contents
    In admin panel's `Transaction' object list, fields `subscription',
    `user', `ipn' are links to related modes instance's admin forms.
 
-2.3 User
+3.3 User
 ========
    This application adds `get_subscription()' method to
    `django.contrib.auth.models.User' class.  This method returns
    subscription of current user, or `None' if user has not subscribed
    to anything.
 
-3 Signals
+4 Signals
 ~~~~~~~~~
   On subscription-related events, the application sends signals that
   project code can connect to and do some site-specific things (e.g.
@@ -122,7 +132,7 @@ Table of Contents
     - `unexpected_expiration'
     - `subscription_modify'
 
-4 Views
+5 Views
 ~~~~~~~
   Views are available in `subscription.views' module
   - `subscription_list' lists available subscription using
@@ -130,7 +140,7 @@ Table of Contents
   - `subscription_detail' presents details of the selected
     subscription (login is required for this view)
 
-5 URLs
+6 URLs
 ~~~~~~
   Module `subscription.urls' configures default urls for module.  This
   are:
@@ -143,7 +153,7 @@ Table of Contents
   - `cancel/' displays `subscription/subscription_cancel.html'
     template and is where cancelled PayPal transactions are redirected
 
-6 Templates
+7 Templates
 ~~~~~~~~~~~
   Templates `subscription/subscription_done.html' and
   `subscription/subscription_cancel.html' receive no context.
@@ -157,17 +167,36 @@ Table of Contents
   variable which is a `Subscription' object, and `form' variable which
   is a PayPal form for the `object'.
 
-7 Example code
+8 Example code
 ~~~~~~~~~~~~~~
   Example usage and templates are available as `django-saas-kit'
   project at [http://github.com/CrowdSense/django-saas-kit/]
 
-8 Bugs and omissions
+9 Bugs and omissions
 ~~~~~~~~~~~~~~~~~~~~
   - There is no `setup.py' script for automated installation.
   - No support for changing (upgrading/downgrading) subscription by
     user; received payments for subscription from already
     subscribed users have undefined consequences.
+  - No support for PayPal PDT; PDT has only presentational value (IPN
+    needs to be received anyway, and PDT should be used only to
+    display transaction details to user on after transaction landing
+    page), so support for it has been intentionally omitted.
 
-* Dual licensed under the MIT (MIT-LICENSE.txt)
-* and GPL (GPL-LICENSE.txt) licenses.
+9.1 Plans
+=========
+   - Support for upgrading and downgrading plan
+   - System for quotas within a plan (move here from django-muaccount,
+     since it is needed for upgrade/downgrade; add decent API for
+     pluggable quota checks)
+   - PayPal shared secrets and encrypted button support
+   - Single payments for subscription, including possibility of
+     pay-as-you-go scheme
+   - After unsubscribing at PayPal, user should keep access until end
+     of current subscription period; django-subscription should track
+     subscription periods
+
+10 License
+~~~~~~~~~~
+  This project is dual-licensed on terms of MIT (MIT-LICENSE.txt) and
+  GPL (GPL-LICENSE.txt) licenses.
