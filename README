@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/02 23:43:48
+Date: 2009/06/03 00:14:29
 
 
 
@@ -36,6 +36,9 @@ Table of Contents
   Copy or symlink `subscription/' directory on Python path (`setup.py'
   script for automated installation will be supplied later on). Module
   contents are available in the `subscription' module.
+
+  In order to use application, add `subscription' to INSTALLED_APPS in
+  Django project `settings.py' file.
 
 2 Settings
 ~~~~~~~~~~

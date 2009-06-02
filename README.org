@@ -17,6 +17,9 @@ payments.
   Copy or symlink =subscription/= directory on Python path (=setup.py=
   script for automated installation will be supplied later on). Module
   contents are available in the =subscription= module.
+
+  In order to use application, add =subscription= to INSTALLED_APPS in
+  Django project =settings.py= file.
 * Settings
   In project's =settings.py= file =SUBSCRIPTION_PAYPAL_SETTINGS=
   should be set to a dictionary with default PayPal button settings,
