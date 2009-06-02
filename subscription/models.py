@@ -6,12 +6,12 @@ from paypal.standard import ipn
 import signals
 
 class Transaction(models.Model):
-    timestamp = models.DateTimeField(auto_now_add=True)
-    subscription = models.ForeignKey('subscription.Subscription', null=True, blank=True)
-    user = models.ForeignKey(auth.models.User, null=True, blank=True)
-    ipn = models.ForeignKey(ipn.models.PayPalIPN, null=True, blank=True)
-    event = models.CharField(max_length=100)
-    amount = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, editable=False)
+    subscription = models.ForeignKey('subscription.Subscription', null=True, blank=True, editable=False)
+    user = models.ForeignKey(auth.models.User, null=True, blank=True, editable=False)
+    ipn = models.ForeignKey(ipn.models.PayPalIPN, null=True, blank=True, editable=False)
+    event = models.CharField(max_length=100, editable=False)
+    amount = models.DecimalField(max_digits=64, decimal_places=2, null=True, blank=True, editable=False)
     comment = models.TextField(blank=True, default='')
 
     class Meta:
