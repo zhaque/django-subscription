@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/03 00:14:29
+Date: 2009/06/05 17:55:25
 
 
 
@@ -46,6 +46,12 @@ Table of Contents
   should be set to a dictionary with default PayPal button settings,
   as described in django-paypal documentation. At least the `business'
   key should be set to your PayPal business e-mail.
+
+  `SUBSCRIPTION_PAYPAL_FORM' can be set to a form class pathname as
+  string to use custom PayPal payment button class.  Default is
+  'paypal.standard.forms.PayPalPaymentsForm'.  To use PayPal encrypted
+  buttons or shared secrets, specify needed django-paypal settings and
+  set an appropriate class here.
 
 3 Models
 ~~~~~~~~
@@ -192,8 +198,7 @@ Table of Contents
    - System for quotas within a plan (move here from django-muaccount,
      since it is needed for upgrade/downgrade; add decent API for
      pluggable quota checks)
-   - PayPal shared secrets and encrypted button support
-   - Single payments for subscription, including possibility of
+  - Single payments for subscription, including possibility of
      pay-as-you-go scheme
    - After unsubscribing at PayPal, user should keep access until end
      of current subscription period; django-subscription should track
