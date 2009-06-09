@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/05 17:55:25
+Date: 2009/06/09 19:28:18
 
 
 
@@ -19,8 +19,9 @@ Table of Contents
 2 Settings
 3 Models
     3.1 Subscription
-    3.2 Transaction
-    3.3 User
+    3.2 UserSubscription
+        3.2.1 methods
+    3.3 Transaction
 4 Signals
 5 Views
 6 URLs
@@ -53,6 +54,14 @@ Table of Contents
   buttons or shared secrets, specify needed django-paypal settings and
   set an appropriate class here.
 
+  `SUBSCRIPTION_GRACE_PERIOD' is an integer and it specifies number of
+  days after individual subscription expiry on which account is
+  actually treated as expired.  Default is 2 days.  Intent of this
+  setting is that recurring payments take place e.g. monthly, so
+  either on last day of subscription period, or even on first day
+  after it; this way we avoind unintentionally locking out user
+  account.
+
 3 Models
 ~~~~~~~~
   Two models defined by the application are available in the
@@ -78,7 +87,43 @@ Table of Contents
      `django.contrib.auth.models.Group'.  Subscription is identified
      by the group.
 
-3.2 Transaction
+3.2 UserSubscription
+====================
+   This model instances define a user's subscription.  Model has
+   following fields:
+   - `user' - one-to-one relation to `auth.User' model, primary key;
+   - `subscription' - foreign key relation to `Subscription' model,
+     specifies kind of subscription `user' is subscribed to;
+   - `expires' - expiry date (if null, subscription never expires)
+   - `IPN' - foreign key to `paypal.standard.IPN' model, pointing to
+     payment related to last extension of subscription.
+
+3.2.1 methods
+-------------
+    - `user_is_group_member()' - returns true if `user' is member of
+      `subscription.group';
+    - `expired()' - returns true if there is more than
+      `SUBSCRIPTION_GRACE_PERIOD' days after `expires' date;
+    - `valid()' - returns true if:
+      + `expired()' is false and `user_is_group_member()' is false, or
+      + `expired()' is true and `user_is_group_member()' is true;
+    - `unsubscribe()' - remove `subscription.group' from `user''s groups
+    - `subscribe()' - add `subscription.group' to `user''s groups
+      (called automatically on PayPal one-time payment and
+      subscription start);
+    - `fix()' - if not `valid()', call `unsubscribe()' or `subscribe()';
+    - `extend(timedelta=None)' - extend `expires' field by provided
+      `datetime.timedelta', or by `subscription''s recurrence period
+      (called automatically on PayPal subscription payments);
+
+    Convenience function `subscription.models.unsubscribe_expired()'
+    is also provided.  It loops over all expired `UserSubscription'
+    instances and calls `unsubscribe()' method.  It is intended to be
+    called automatically from cron, django-cron, or on some event.
+    Alternatively, `fix()' can be called on events related to
+    user, e.g. on user login.
+
+3.3 Transaction
 ===============
    `Transaction' model is mostly read-only and is used to view
    subscription-related events in the admin panel. It has following
@@ -109,13 +154,6 @@ Table of Contents
      modified.
    In admin panel's `Transaction' object list, fields `subscription',
    `user', `ipn' are links to related modes instance's admin forms.
-
-3.3 User
-========
-   This application adds `get_subscription()' method to
-   `django.contrib.auth.models.User' class.  This method returns
-   subscription of current user, or `None' if user has not subscribed
-   to anything.
 
 4 Signals
 ~~~~~~~~~
@@ -195,14 +233,8 @@ Table of Contents
 9.1 Plans
 =========
    - Support for upgrading and downgrading plan
-   - System for quotas within a plan (move here from django-muaccount,
-     since it is needed for upgrade/downgrade; add decent API for
-     pluggable quota checks)
-  - Single payments for subscription, including possibility of
+   - Single payments for subscription, including possibility of
      pay-as-you-go scheme
-   - After unsubscribing at PayPal, user should keep access until end
-     of current subscription period; django-subscription should track
-     subscription periods
 
 10 License
 ~~~~~~~~~~

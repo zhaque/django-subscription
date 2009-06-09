@@ -1,17 +1,24 @@
+import datetime
+
+from django.conf import settings
 from django.db import models
 from django.contrib import auth
 
 from paypal.standard import ipn
 
-import signals
+import signals, utils
 
 class Transaction(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, editable=False)
-    subscription = models.ForeignKey('subscription.Subscription', null=True, blank=True, editable=False)
-    user = models.ForeignKey(auth.models.User, null=True, blank=True, editable=False)
-    ipn = models.ForeignKey(ipn.models.PayPalIPN, null=True, blank=True, editable=False)
+    subscription = models.ForeignKey('subscription.Subscription',
+                                     null=True, blank=True, editable=False)
+    user = models.ForeignKey(auth.models.User,
+                             null=True, blank=True, editable=False)
+    ipn = models.ForeignKey(ipn.models.PayPalIPN,
+                            null=True, blank=True, editable=False)
     event = models.CharField(max_length=100, editable=False)
-    amount = models.DecimalField(max_digits=64, decimal_places=2, null=True, blank=True, editable=False)
+    amount = models.DecimalField(max_digits=64, decimal_places=2,
+                                 null=True, blank=True, editable=False)
     comment = models.TextField(blank=True, default='')
 
     class Meta:
@@ -51,15 +58,82 @@ class Subscription(models.Model):
                                           self.get_recurrence_unit_display())
         else: return '%.02f one-time fee' % self.price
 
-# add User.get_subscription() method
-def __user_get_subscription(user):
-    if not hasattr(user, '_subscription_cache'):
-        sl = Subscription.objects.filter(group__in=user.groups.all())[:1]
-        if sl: user._subscription_cache = sl[0]
-        else: user._subscription_cache = None
-    return user._subscription_cache
-auth.models.User.add_to_class('get_subscription', __user_get_subscription)
+class UserSubscription(models.Model):
+    user = models.OneToOneField(auth.models.User, primary_key=True)
+    subscription = models.ForeignKey(Subscription)
+    expires = models.DateField(null = True)
+    ipn = models.ForeignKey(ipn.models.PayPalIPN, default=None,
+                            null=True, blank=True)
 
+    _grace_timedelta = datetime.timedelta(
+        getattr(settings, 'SUBSCRIPTION_GRACE_PERIOD', 2))
+
+    def user_is_group_member(self):
+        "Returns True is user is member of subscription's group"
+        return self.subscription.group in self.user.groups.all()
+    user_is_group_member.boolean = True
+
+    def expired(self):
+        """Returns true if there is more than SUBSCRIPTION_GRACE_PERIOD
+        days after expiration date."""
+        return self.expires is not None and (
+            self.expires + self._grace_timedelta < datetime.date.today() )
+    expired.boolean = True
+
+    def valid(self):
+        """Validate group membership.
+
+        Returns True if not expired and user is in group, or expired
+        and user is not in group."""
+        if self.expired(): return not self.user_is_group_member()
+        else: return self.user_is_group_member()
+    valid.boolean = True
+
+    def unsubscribe(self):
+        """Unsubscribe user."""
+        self.user.groups.remove(self.subscription.group)
+        self.user.save()
+
+    def subscribe(self):
+        """Subscribe user."""
+        self.user.groups.add(self.subscription.group)
+        self.user.save()
+
+    def fix(self):
+        """Fix group membership if not valid()."""
+        if not self.valid():
+            if self.expired(): self.unsubscribe()
+            else: self.subscribe()
+
+    def extend(self, timedelta=None):
+        """Extend subscription by `timedelta' or by subscription's
+        recurrence period."""
+        if timedelta is not None:
+            self.expires += timedelta
+        else:
+            if self.subscription.recurrence_unit:
+                self.expires = utils.extend_date_by(
+                    self.expires,
+                    self.subscription.recurrence_period,
+                    self.subscription.recurrence_unit)
+            else:
+                self.expires = None
+
+    def __unicode__(self):
+        rv = u"%s's %s" % ( self.user, self.subscription )
+        if self.expired():
+            rv += u' (expired)'
+        return rv
+
+def unsubscribe_expired():
+    """Unsubscribes all users whose subscription has expired.
+
+    Loops through all UserSubscription objects with `expires' field
+    earlier than datetime.date.today() - SUBSCRIPTION_GRACE_PERIOD,
+    and unsubscribes user."""
+    for u in User.objects.get(
+          expires__lt=datetime.date.today() - UserSubscription._grace_timedelta):
+        u.usersubscription.unsubscribe()
 
 #### Handle PayPal signals
 
@@ -76,13 +150,36 @@ def handle_payment_was_successful(sender, **kwargs):
     s, u = _payment_args(sender)
     if s and u:
         if not s.recurrence_unit:
-            u.groups.add(s.group)
-            u.save()
+            try:
+                us = u.usersubscription
+            except UserSubscription.DoesNotExist:
+                us = UserSubscription(
+                    user = u,
+                    subscription = s,
+                    expires = None,
+                    ipn = sender)
+            else:
+                us.subscription = s     # FIXME: upgrade/downgrade
+                us.expires = None
+                us.ipn = sender
+            # FIXME: check price
+            us.subscribe()
+            us.save()
             Transaction(user=u, subscription=s, ipn=sender,
                         event='one-time payment', amount=sender.mc_gross
                         ).save()
             signals.signed_up.send(s, ipn=sender, subscription=s, user=u)
         else:
+            try: us = u.usersubscription
+            except UserSubscription.DoesNotExist:
+                Transaction(user=u, subscription=s, ipn=sender,
+                            event='unexpected payment',
+                            amount=sender.mc_gross,
+                            comment='Subscription payment for user with no active subscription.',
+                            ).save()
+                signals.event.send(s, ipn=sender, subscription=s, user=u, event='unexpected_payment')
+            # FIXME: check price
+            us.extend()
             Transaction(user=u, subscription=s, ipn=sender,
                         event='subscription payment', amount=sender.mc_gross
                         ).save()
@@ -105,8 +202,21 @@ ipn.signals.payment_was_flagged.connect(handle_payment_was_flagged)
 def handle_subscription_signup(sender, **kwargs):
     s, u = _payment_args(sender)
     if u and s:
-        u.groups.add(s.group)
-        u.save()
+        try:
+            us = u.usersubscription
+        except UserSubscription.DoesNotExist:
+            us = UserSubscription(
+                user = u,
+                subscription = s,
+                expires = datetime.date.today(),
+                ipn = sender)
+        else:
+            us.subscription = s     # FIXME: upgrade/downgrade
+            us.expires = datetime.date.today()
+            us.ipn = sender
+        # FIXME: check price
+        us.subscribe()
+        us.save()
         Transaction(user=u, subscription=s, ipn=sender,
                     event='subscribed', amount=sender.mc_gross
                     ).save()
@@ -118,12 +228,10 @@ def handle_subscription_signup(sender, **kwargs):
         signals.event.send(s, ipn=sender, subscription=s, user=u, event='unexpected_subscription')
 ipn.signals.subscription_signup.connect(handle_subscription_signup)
 
-## FIXME: sanity checks on unsubscribe (is user really subscribe? What if not?)
+## FIXME: sanity checks on unsubscribe (is user really subscribed? What if not?)
 def handle_subscription_cancel(sender, **kwargs):
     s, u = _payment_args(sender)
     if u and s:
-        u.groups.remove(s.group)
-        u.save()
         Transaction(user=u, subscription=s, ipn=sender,
                     event='cancel subscription', amount=sender.mc_gross
                     ).save()
@@ -139,8 +247,6 @@ ipn.signals.subscription_cancel.connect(handle_subscription_cancel)
 def handle_subscription_eot(sender, **kwargs):
     s, u = _payment_args(sender)
     if u and s:
-        u.groups.remove(s.group)
-        u.save()
         Transaction(user=u, subscription=s, ipn=sender,
                     event='expired subscription', amount=sender.mc_gross
                     ).save()
