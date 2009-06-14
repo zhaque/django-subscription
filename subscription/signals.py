@@ -10,5 +10,8 @@ subscribed = Signal()
 unsubscribed = Signal()
 paid = Signal()
 
-# misc events
+# misc. subscription-related events
 event = Signal()
+
+# upgrade/downgrade possibility check
+change_check = Signal()

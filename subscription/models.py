@@ -65,7 +65,7 @@ class UserSubscription(models.Model):
     ipn = models.ForeignKey(ipn.models.PayPalIPN, default=None,
                             null=True, blank=True)
 
-    _grace_timedelta = datetime.timedelta(
+    grace_timedelta = datetime.timedelta(
         getattr(settings, 'SUBSCRIPTION_GRACE_PERIOD', 2))
 
     def user_is_group_member(self):
@@ -77,7 +77,7 @@ class UserSubscription(models.Model):
         """Returns true if there is more than SUBSCRIPTION_GRACE_PERIOD
         days after expiration date."""
         return self.expires is not None and (
-            self.expires + self._grace_timedelta < datetime.date.today() )
+            self.expires + self.grace_timedelta < datetime.date.today() )
     expired.boolean = True
 
     def valid(self):
@@ -119,6 +119,27 @@ class UserSubscription(models.Model):
             else:
                 self.expires = None
 
+    def try_change(self, subscription):
+        """Check whether upgrading/downgrading to `subscription' is possible.
+
+        If subscription change is possible, returns false value; if
+        change is impossible, returns a list of reasons to display.
+
+        Checks are performed by sending
+        subscription.signals.change_check with sender being
+        UserSubscription object, and additional parameter
+        `subscription' being new Subscription instance.  Signal
+        listeners should return None if change is possible, or a
+        reason to display.
+        """
+        if self.subscription == subscription:
+            return [ u'This is your current subscription.' ]
+        return [
+            res[1]
+            for res in signals.change_check.send(
+                self, subscription=subscription)
+            if res[1] ]
+
     def __unicode__(self):
         rv = u"%s's %s" % ( self.user, self.subscription )
         if self.expired():
@@ -132,7 +153,7 @@ def unsubscribe_expired():
     earlier than datetime.date.today() - SUBSCRIPTION_GRACE_PERIOD,
     and unsubscribes user."""
     for u in User.objects.get(
-          expires__lt=datetime.date.today() - UserSubscription._grace_timedelta):
+          expires__lt=datetime.date.today() - UserSubscription.grace_timedelta):
         u.usersubscription.unsubscribe()
 
 #### Handle PayPal signals

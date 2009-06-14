@@ -1,3 +1,5 @@
+import datetime
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.sites.models import Site
@@ -12,7 +14,7 @@ _formclass_dot = _formclass.rindex('.')
 _formclass_module = __import__(_formclass[:_formclass_dot], {}, {}, [''])
 PayPalForm = getattr(_formclass_module, _formclass[_formclass_dot+1:])
 
-from models import Subscription
+from models import Subscription, UserSubscription
 
 def _paypal_form_args(**kwargs):
     "Return PayPal form arguments derived from kwargs."
@@ -68,6 +70,42 @@ def subscription_list(request):
 @login_required
 def subscription_detail(request, object_id):
     s = get_object_or_404(Subscription, id=object_id)
+
+    try: us = request.user.usersubscription
+    except UserSubscription.DoesNotExist:
+        change_denied_reasons = None
+    else:
+        change_denied_reasons = us.try_change(s)
+
     return direct_to_template(
         request, template='subscription/subscription_detail.html',
-        extra_context=dict(object=s, form=_paypal_form(s, request.user)))
+        extra_context=dict(object=s,
+                           form=_paypal_form(s, request.user),
+                           change_denied_reasons=change_denied_reasons))
+
+@login_required
+def subscription_change(request, object_id):
+    s = get_object_or_404(Subscription, id=object_id)
+
+    try: us = request.user.usersubscription
+    except UserSubscription.DoesNotExist:
+        change_denied_reasons = [ 'No existing subscription, nothing to change from.' ]
+    else:
+        change_denied_reasons = us.try_change(s)
+
+    if change_denied_reasons:
+        return direct_to_template(
+            request, template='subscription/subscription_change_error.html',
+            extra_context=dict(
+                subscription=s,
+                change_denied_reasons=change_denied_reasons))
+
+    us.subscription = s
+    # Extend subscription by timedelta if it runs out atm.
+    if us.expires - datetime.date.today() < UserSubscription.grace_timedelta:
+        us.expires += UserSubscription.grace_timedelta
+    us.save()
+
+    return direct_to_template(
+        request, template='subscription/subscription_change.html',
+        extra_context=dict(subscription=s, form=_paypal_form(s, request.user)))
