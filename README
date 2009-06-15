@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/15 17:54:16
+Date: 2009/06/15 18:03:21
 
 
 
@@ -248,9 +248,7 @@ Table of Contents
   subscription.
 
   Template `subscription/subscription_list.html' receives
-  `object_list' variable which is a list of objects.  List element's
-  `subscription' attribute contains a `Subscription' object, and
-  `form' attribute contains PayPal form for this object.
+  `object_list' variable which is a list of `Subscription' objects.
 
   Template `subscription/subscription_detail.html' receives:
   - `object' variable which is a `Subscription' object,
@@ -359,7 +357,7 @@ Table of Contents
 10.1 Plans
 ==========
   - Single payments for subscription, including possibility of
-     pay-as-you-go scheme
+    pay-as-you-go scheme
 
 11 License
 ~~~~~~~~~~
