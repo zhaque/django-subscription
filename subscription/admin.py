@@ -32,13 +32,13 @@ class UserSubscriptionAdminForm(forms.ModelForm):
     extend_subscription = forms.fields.BooleanField(required=False)
 
 class UserSubscriptionAdmin(admin.ModelAdmin):
-    list_display = ( '__unicode__', _user, _subscription, 'expires', 'valid' )
+    list_display = ( '__unicode__', _user, _subscription, 'active', 'expires', 'valid' )
     list_display_links = ( '__unicode__', )
-    list_filter = ('subscription', )
+    list_filter = ('active', 'subscription', )
     date_hierarchy = 'expires'
     form = UserSubscriptionAdminForm
     fieldsets = (
-        (None, {'fields' : ('user', 'subscription', 'expires', 'ipn')}),
+        (None, {'fields' : ('user', 'subscription', 'expires', 'active')}),
         ('Actions', {'fields' : ('fix_group_membership', 'extend_subscription'),
                      'classes' : ('collapse',)}),
         )
