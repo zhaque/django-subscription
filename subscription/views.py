@@ -30,7 +30,7 @@ def _paypal_form_args(upgrade_subscription=False, **kwargs):
         if not rel.startswith('/'): rel = '/'+rel
         return 'http://%s%s' % ( Site.objects.get_current().domain, rel )
 
-    if upgrade_subscription: returl = reverse('subscription_upgrade_done')
+    if upgrade_subscription: returl = reverse('subscription_change_done')
     else: returl = reverse('subscription_done')
 
     rv = settings.SUBSCRIPTION_PAYPAL_SETTINGS.copy()
@@ -103,37 +103,3 @@ def subscription_detail(request, object_id):
         extra_context=dict(object=s, usersubscription=s_us,
                            change_denied_reasons=change_denied_reasons,
                            form=form, cancel_url=cancel_url))
-
-@login_required
-def __subscription_change(request, object_id):
-    s = get_object_or_404(Subscription, id=object_id)
-
-    try:
-        old_us = request.user.usersubscription
-    except UserSubscription.DoesNotExist:
-        change_denied_reasons = []
-        old_us = None
-    else:
-        change_denied_reasons = us.try_change(s)
-
-    if change_denied_reasons:
-        return direct_to_template(
-            request, template='subscription/subscription_change_error.html',
-            extra_context=dict(
-                subscription=s,
-                change_denied_reasons=change_denied_reasons))
-
-    us = UserSubscription(
-        user=request.user, subscription=s,
-        expires=datetime.date.today() + UserSubscription.grace_timedelta)
-    us.save()
-
-    if old_us:
-        old_us.active = False
-        old_us.save()
-        unused_days = (old_us.expires - datetime.date.today()).days
-        unused_money = unused_days * old_us.subscription.price_per_day()
-        if unused_money > 0:
-            pass # USDiscount(usersubscription=us, discount=unused_money).save()
-
-    return HttpResponseRedirect(us.get_absolute_url())
