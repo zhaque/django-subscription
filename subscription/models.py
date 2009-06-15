@@ -134,7 +134,11 @@ class UserSubscription(models.Model):
     def fix(self):
         """Fix group membership if not valid()."""
         if not self.valid():
-            if self.expired() or not self.active: self.unsubscribe()
+            if self.expired() or not self.active:
+                self.unsubscribe()
+                Transaction(user=self.user, subscription=self.subscription, ipn=None,
+                            event='subscription expired'
+                            ).save()
             else: self.subscribe()
 
     def extend(self, timedelta=None):
@@ -189,9 +193,12 @@ def unsubscribe_expired():
     Loops through all UserSubscription objects with `expires' field
     earlier than datetime.date.today() - SUBSCRIPTION_GRACE_PERIOD,
     and unsubscribes user."""
-    for u in User.objects.get(
+    for us in UserSubscription.objects.get(
           expires__lt=datetime.date.today() - UserSubscription.grace_timedelta):
-        u.usersubscription.unsubscribe()
+        us.unsubscribe()
+        Transaction(user=us.user, subscription=us.subscription, ipn=None,
+                    event='subscription expired'
+                    ).save()
 
 #### Handle PayPal signals
 
@@ -233,7 +240,8 @@ def handle_payment_was_successful(sender, **kwargs):
             Transaction(user=u, subscription=s, ipn=sender,
                         event='one-time payment', amount=sender.mc_gross
                         ).save()
-            signals.signed_up.send(s, ipn=sender, subscription=s, user=u)
+            signals.signed_up.send(s, ipn=sender, subscription=s, user=u,
+                                   usersubscription=us)
         else:
             # FIXME: check amount
             us.extend()
@@ -241,7 +249,8 @@ def handle_payment_was_successful(sender, **kwargs):
             Transaction(user=u, subscription=s, ipn=sender,
                         event='subscription payment', amount=sender.mc_gross
                         ).save()
-            signals.paid.send(s, ipn=sender, subscription=s, user=u)
+            signals.paid.send(s, ipn=sender, subscription=s, user=u,
+                              usersubscription=us)
     else:
         Transaction(user=u, subscription=s, ipn=sender,
                     event='unexpected payment', amount=sender.mc_gross
@@ -278,7 +287,8 @@ def handle_subscription_signup(sender, **kwargs):
                     event='activated', amount=sender.mc_gross
                     ).save()
 
-        signals.subscribed.send(s, ipn=sender, subscription=s, user=u)
+        signals.subscribed.send(s, ipn=sender, subscription=s, user=u,
+                                usersubscription=us)
     else:
         Transaction(user=u, subscription=u, ipn=sender,
                     event='unexpected subscription', amount=sender.mc_gross
@@ -291,35 +301,26 @@ def handle_subscription_cancel(sender, **kwargs):
     us = _ipn_usersubscription(sender)
     u, s = us.user, us.subscription
     if us.pk is not None:
-        us.delete()
-        Transaction(user=u, subscription=s, ipn=sender,
-                    event='cancel subscription', amount=sender.mc_gross
-                    ).save()
+        if not us.active:
+            us.unsubscribe()
+            us.delete()
+            Transaction(user=u, subscription=s, ipn=sender,
+                        event='remove subscription', amount=sender.mc_gross
+                        ).save()
+        else:
+            Transaction(user=u, subscription=s, ipn=sender,
+                        event='cancel subscription', amount=sender.mc_gross
+                        ).save()
         signals.unsubscribed.send(s, ipn=sender, subscription=s, user=u,
-                                  reason='cancel')
+                                  usersubscription=us,
+                                  refund=refund, reason='cancel')
     else:
         Transaction(user=u, subscription=s, ipn=sender,
                     event='unexpected cancel', amount=sender.mc_gross
                     ).save()
         signals.event.send(s, ipn=sender, subscription=s, user=u, event='unexpected_cancel')
 ipn.signals.subscription_cancel.connect(handle_subscription_cancel)
-
-def handle_subscription_eot(sender, **kwargs):
-    us = _ipn_usersubscription(sender)
-    u, s = us.user, us.subscription
-    if us.pk is not None:
-        us.delete()
-        Transaction(user=u, subscription=s, ipn=sender,
-                    event='expired subscription', amount=sender.mc_gross
-                    ).save()
-        signals.unsubscribed.send(s, ipn=sender, subscription=s, user=u,
-                                  reason='eot')
-    else:
-        Transaction(user=u, subscription=s, ipn=sender,
-                    event='unexpected expiration', amount=sender.mc_gross
-                    ).save()
-        signals.event.send(s, ipn=sender, subscription=s, user=u, event='unexpected_expiration')
-ipn.signals.subscription_eot.connect(handle_subscription_eot)
+ipn.signals.subscription_eot.connect(handle_subscription_cancel)
 
 def handle_subscription_modify(sender, **kwargs):
     us = _ipn_usersubscription(sender)
