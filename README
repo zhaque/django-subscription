@@ -2,7 +2,7 @@
                               ===================
 
 Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/09 19:28:18
+Date: 2009/06/15 17:54:16
 
 
 
@@ -19,6 +19,7 @@ Table of Contents
 2 Settings
 3 Models
     3.1 Subscription
+        3.1.1 methods
     3.2 UserSubscription
         3.2.1 methods
     3.3 Transaction
@@ -26,10 +27,11 @@ Table of Contents
 5 Views
 6 URLs
 7 Templates
-8 Example code
-9 Bugs and omissions
-    9.1 Plans
-10 License
+8 Subscription change
+9 Example code
+10 Bugs and omissions
+    10.1 Plans
+11 License
 
 
 1 Installation
@@ -87,6 +89,16 @@ Table of Contents
      `django.contrib.auth.models.Group'.  Subscription is identified
      by the group.
 
+3.1.1 methods
+-------------
+    - `price_per_day()' - returns estimate subscription price per day,
+      as a float.  This value is used to give user that upgrades
+      subscription a rebate for unused part of month.  Value is only
+      an estimate: average length of month (30.4368 days) and year
+      (365.2425 days) are used.
+    - `get_pricing_display()' - return pretty pricing info for display
+      as a string.
+
 3.2 UserSubscription
 ====================
    This model instances define a user's subscription.  Model has
@@ -97,6 +109,9 @@ Table of Contents
    - `expires' - expiry date (if null, subscription never expires)
    - `IPN' - foreign key to `paypal.standard.IPN' model, pointing to
      payment related to last extension of subscription.
+   Class field `grace_timedelta' is provided (read-only) and contains
+   effective value of `SUBSCRIPTION_GRACE_PERIOD' setting as
+   `datetime.timedelta' object.
 
 3.2.1 methods
 -------------
@@ -115,6 +130,11 @@ Table of Contents
     - `extend(timedelta=None)' - extend `expires' field by provided
       `datetime.timedelta', or by `subscription''s recurrence period
       (called automatically on PayPal subscription payments);
+    - `try_change(subscription)' - sends `change_check' signal to test
+      whether change from `self.subscription' to Subscription object
+      supplied in `subscription' parameter is possible.  Returns list
+      of reasons why upgrade is denied; if list is empty, upgrade is
+      allowed.
 
     Convenience function `subscription.models.unsubscribe_expired()'
     is also provided.  It loops over all expired `UserSubscription'
@@ -136,17 +156,19 @@ Table of Contents
    - `ipn' - foreign key of `paypal.standard.ipn.models.PayPalIPN'
      model identifying payment callback related to event
    - `event' - type of event, one of:
+     - new usersubscription
      - one-time payment
      - subscription payment
      - unexpected payment
      - payment flagged
-     - subscribed
+     - deactivated
+     - activated
      - unexpected subscription
+     - remove subscription
      - cancel subscription
      - unexpected cancel
-     - expired subscription
-     - unexpected expiration
      - modify subscription
+     - subscription expired
      The "unexpected" events are ones that could not be related to any
      specific user/subscription pair.
    - `amount' - amount (`mc_gross') of `ipn'
@@ -165,19 +187,28 @@ Table of Contents
   sender, and have arguments `ipn'
   (`paypal.standard.ipn.models.PayPalIPN' model instance), `user'
   (`django.contrib.auth.models.User' instance), `subscription'
-  (`Subscription' instance or None, same as sender).  Signals are:
+  (`Subscription' instance or None, same as sender),
+  `usersubscription' (`UserSubscription' instance).  Signals are:
   - `signed_up' - user signed up for one-time payment,
   - `subscribed' - user subscribed
-  - `unsubscribed' - user unsubscribed from PayPal
+  - `unsubscribed' - user unsubscribed from PayPal (`usersubscription'
+    is a deleted object if `usersubscription.active' is True)
   - `paid' - payment received from a subscription
-  - `event' - other strange event, receives additional `event'
-    argument, which may be
+  - `event' - other strange event, does not receive `usersubscription'
+    argument (there is no meaningful `UserSubscription' object) and
+    receives additional `event' argument, which may be
     - `unexpected_payment'
     - `flagged'
     - `unexpected_subscription'
     - `unexpected_cancel'
-    - `unexpected_expiration'
-    - `subscription_modify'
+   - `subscription_modify'
+
+  Signal `change_check' is a hook for verification of subscription
+  change.  Sender is `UserSubscription' object with user's current
+  subscription, additional parameter `subscription' provides
+  subscription to change to.  If subscription change is possible,
+  listener should return `None', otherwise it should return a string
+  describing reason that will be displayed to user.
 
 5 Views
 ~~~~~~~
@@ -185,7 +216,8 @@ Table of Contents
   - `subscription_list' lists available subscription using
     `subscription/subscription_list.html' template
   - `subscription_detail' presents details of the selected
-    subscription (login is required for this view)
+    subscription (login is required for this view) along with PayPal
+    button for subscription or upgrade.
 
 6 URLs
 ~~~~~~
@@ -196,7 +228,12 @@ Table of Contents
     Subscription with ID /id/
   - `paypal/' is PayPal IPN URL
   - `done/' displays `subscription/subscription_done.html' template
-    and is where successful PayPal transactions are redirected
+    and is where successful PayPal transactions for initial
+    subscription are redirected
+  - `change-done/' displays
+    `subscription/subscription_change_done.html' template and is
+    where successful PayPal transactions for subscription change are
+    redirected
   - `cancel/' displays `subscription/subscription_cancel.html'
     template and is where cancelled PayPal transactions are redirected
 
@@ -205,38 +242,126 @@ Table of Contents
   Templates `subscription/subscription_done.html' and
   `subscription/subscription_cancel.html' receive no context.
 
+  Template `subscription/subscription_change_dane.html' receives
+  `cancel_url' parameter, which is URL to PayPal list of transactions
+  with site's merchant account, making it easier to cancel the old
+  subscription.
+
   Template `subscription/subscription_list.html' receives
   `object_list' variable which is a list of objects.  List element's
   `subscription' attribute contains a `Subscription' object, and
   `form' attribute contains PayPal form for this object.
 
-  Template `subscription/subscription_detail.html' receives `object'
-  variable which is a `Subscription' object, and `form' variable which
-  is a PayPal form for the `object'.
+  Template `subscription/subscription_detail.html' receives:
+  - `object' variable which is a `Subscription' object,
+  - `usersubscription' variable, which is current user's active
+    `UserSubscription' instance (may be used to tell apart initial
+    subscription from subscription change/upgrade, or to display
+    current subscription's expiry date),
+  - `change_denied_reasons', which is a list of reasons that
+    subscription change/upgrade is denied; if false (empty list or
+    `None' if user is not subscribed), change or signup is allowed,
+  - `form' variable which is a PayPal form for the `object', if
+    `change_denied_reasons' is false,
+  - `cancel_url', which is URL to PayPal list of transactions with
+    site's merchant account, making it easier to cancel the old
+    subscription.
 
-8 Example code
+8 Subscription change
+~~~~~~~~~~~~~~~~~~~~~
+  Most complex flow in this app is when user wants to change (upgrade)
+  current subscription.  For subscriptions we are using PayPal
+  standard subscriptions API.  This means, we get three kinds of
+  asynchronous IPN notifications:
+  - subscr_signup when user signs up for new subscription,
+  - subscr_payment on every single payment,
+  - subscr_cancel when user or merchant cancels subscription (or
+    subscr_eot when time-limited subscription runs out; we treat
+    subscr_eot exactly as subscr_cancel).
+  When user signs up, we get subscr_signup and subscr_payment for
+  first payment, in random order.  There is no support for changing
+  running subscription, so user needs to sign up for new subscription
+  and cancel old one.
+
+  Events for subscriptions are handled this way:
+  - subscr_payment finds UserSubscription object for User and
+    Subscription ID specified in the IPN.  If UserSubscription is not
+    found, new one is created, which becomes inactive.  Found or new
+    UserSubscription object is extended for the next billing period.
+  - subscr_signup finds UserSubscription object for User and
+    Subscription ID specified in the IPN.  If UserSubscription is not
+    found, new one is created.  Found or created UserSubscription is
+    set to active, User is added to subscription's group; if user has
+    another UserSubscription, they are made inactive and user is
+    removed from these Subscription groups.  In effect, on signup the
+    new subscription becomes user's only active one, and its group
+    only subscription-related group to which user belongs.
+  - subscr_cancel finds relevant UserSubscription object.  If it is
+    inactive (which means subscription change), removes user from its
+    subscription's group, and deletes the UserSubscription.  If it is
+    active, does nothing, so user can use up rest of current billing
+    period.
+
+  So, signup flow is:
+  - user clicks in PayPal subscribe button displayed on subscription
+    detail page and subscribes at PayPal,
+  - subscr_payment extends the UserSubscription,
+  - subscr_signup makes the UserSubscription active and adds user to group,
+  - whichever of those got called first, creates the UserSubscription.
+
+  Cancel flow is:
+  - user cancels subscription at PayPal,
+  - UserSubscription is active, so it is kept and stays valid until
+    expiry.
+
+  Subscription change flow is:
+  - If user is allowed to change subscription, subscription detail page
+    displays PayPal subscribe button,
+  - user clicks subscribe button and signs up for new subscription at
+    PayPal,
+  - landing page after PayPal transaction displays link to PayPal
+    transaction list which user can use to cancel old subscription at
+    PayPal,
+  - user cancels old subscription at PayPal;
+  - whichever of subscr_payment or subscr_signup gets called first,
+    creates new, inactive UserSubscription instance,
+  - subscr_payment extends new UserSubscription instance for next
+    billing period,
+  - subscr_signup deactivates all active UserSubscriptions and removes
+    user from group; then, activates new UserSubscription and adds
+    user to its subscription's group,
+  - subscr_cancel (which gets called after previous two, because user
+    needs some time to click through the PayPal forms) finds inactive
+    UserSubscription, ensures that user is really not member of group,
+    and deletes the UserSubscription object.
+
+  If user makes a mistake and cancels new subscription instead of the
+  old one, new subscription goes through "Cancel flow" above, does not
+  get deleted, so user has chance to fix things at PayPal.  User
+  should add `signals.unsubscribed' handler that would detect such
+  situation (if `usersubscription' parameter is active, and user has
+  inactive UserSubscription objects, cancel was probably a mistake)
+  and notify user of his mistake.
+
+9 Example code
 ~~~~~~~~~~~~~~
   Example usage and templates are available as `django-saas-kit'
   project at [http://github.com/CrowdSense/django-saas-kit/]
 
-9 Bugs and omissions
-~~~~~~~~~~~~~~~~~~~~
+10 Bugs and omissions
+~~~~~~~~~~~~~~~~~~~~~
   - There is no `setup.py' script for automated installation.
-  - No support for changing (upgrading/downgrading) subscription by
-    user; received payments for subscription from already
-    subscribed users have undefined consequences.
   - No support for PayPal PDT; PDT has only presentational value (IPN
     needs to be received anyway, and PDT should be used only to
     display transaction details to user on after transaction landing
     page), so support for it has been intentionally omitted.
 
-9.1 Plans
-=========
-   - Support for upgrading and downgrading plan
-   - Single payments for subscription, including possibility of
+10.1 Plans
+==========
+  - Single payments for subscription, including possibility of
      pay-as-you-go scheme
 
-10 License
+11 License
 ~~~~~~~~~~
   This project is dual-licensed on terms of MIT (MIT-LICENSE.txt) and
   GPL (GPL-LICENSE.txt) licenses.
