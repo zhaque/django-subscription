@@ -24,6 +24,14 @@ class Transaction(models.Model):
     class Meta:
         ordering = ('-timestamp',)
 
+
+_recurrence_unit_days = {
+    'D' : 1.,
+    'W' : 7.,
+    'M' : 30.4368,                      # http://en.wikipedia.org/wiki/Month#Julian_and_Gregorian_calendars
+    'Y' : 365.2425,                     # http://en.wikipedia.org/wiki/Year#Calendar_year
+    }
+
 class Subscription(models.Model):
     name = models.CharField(max_length=100, unique=True, null=False)
     description = models.TextField(blank=True)
@@ -41,6 +49,20 @@ class Subscription(models.Model):
         ordering = ('price','-recurrence_period')
 
     def __unicode__(self): return self.name
+
+    def price_per_day(self):
+        """Return estimate subscription price per day, as a float.
+
+        This is used to charge difference when user changes
+        subscription.  Price returned is an estimate; month length
+        used is 30.4368 days, year length is 365.2425 days (averages
+        including leap years).  One-time payments return 0.
+        """
+        if self.recurrence_unit is None:
+            return 0
+        return float(self.price) / (
+            self.recurrence_period*_recurrence_unit_days[self.recurrence_unit]
+            )
 
     @models.permalink
     def get_absolute_url(self):
