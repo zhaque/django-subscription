@@ -1,4 +1,4 @@
-import datetime, urllib
+import datetime, decimal, urllib
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -24,6 +24,8 @@ if settings.PAYPAL_TEST:
 else:
     cancel_url = 'https://www.paypal.com/cgi-bin/webscr?cmd=_subscr-find&alias=%s' % urllib.quote(settings.PAYPAL_RECEIVER_EMAIL)
 
+# https://cms.paypal.com/us/cgi-bin/?cmd=_render-content&content_ID=developer/e_howto_html_Appx_websitestandard_htmlvariables
+
 def _paypal_form_args(upgrade_subscription=False, **kwargs):
     "Return PayPal form arguments derived from kwargs."
     def _url(rel):
@@ -38,12 +40,18 @@ def _paypal_form_args(upgrade_subscription=False, **kwargs):
                return_url = _url(returl),
                cancel_return = _url(reverse("subscription_cancel")),
                **kwargs)
-    print rv
     return rv
 
-def _paypal_form(subscription, user, rebate=None, upgrade_subscription=False):
+def _paypal_form(subscription, user, discount=None, upgrade_subscription=False):
     if not user.is_authenticated: return None
-    if rebate is not None: print "FIXME: rebate", rebate
+#discount     if discount is None: trial = {}
+#discount     else:
+#discount         if discount>=subscription.price: a1=0
+#discount         else: a1 = subscription.price - discount
+#discount         trial = dict(a1=a1,
+#discount                      p1=subscription.recurrence_period,
+#discount                      t1=subscription.recurrence_unit)
+
     if subscription.recurrence_unit:
         return PayPalForm(
             initial = _paypal_form_args(
@@ -57,7 +65,8 @@ def _paypal_form(subscription, user, rebate=None, upgrade_subscription=False):
                 t3=subscription.recurrence_unit,
                 src=1,                  # make payments recur
                 sra=1,            # reattempt payment on payment error
-                upgrade_subscription=upgrade_subscription
+                upgrade_subscription=upgrade_subscription,
+#discount                 **trial
                 ),
             button_type='subscribe'
             )
@@ -89,11 +98,17 @@ def subscription_detail(request, object_id):
         us = None
     else:
         change_denied_reasons = us.try_change(s)
-        unused_days = (us.expires - datetime.date.today()).days
-        discount = unused_days * us.subscription.price_per_day()
+        discount = None                 #discount
+#discount         unused_days = (us.expires - datetime.date.today()).days
+#discount         discount = decimal.Decimal(
+#discount             '%.02f'%(unused_days * us.subscription.price_per_day()))
 
-    if change_denied_reasons: form = None
-    else: form = _paypal_form(s, request.user, discount, upgrade_subscription=us is not None)
+
+
+    if change_denied_reasons: form = discount = None
+    else:
+        form = _paypal_form(s, request.user, discount,
+                            upgrade_subscription=(us is not None) and (us.subscription<>s))
 
     try: s_us = request.user.usersubscription_set.get(subscription=s)
     except UserSubscription.DoesNotExist: s_us = None
@@ -102,4 +117,4 @@ def subscription_detail(request, object_id):
         request, template='subscription/subscription_detail.html',
         extra_context=dict(object=s, usersubscription=s_us,
                            change_denied_reasons=change_denied_reasons,
-                           form=form, cancel_url=cancel_url))
+                           form=form, discount=discount, cancel_url=cancel_url))
