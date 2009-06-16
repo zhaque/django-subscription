@@ -1,0 +1,17 @@
+digraph usersubscription {
+    00[label="-active\n-cancelled"];
+    01[label="-active\n+cancelled"];
+    10[label="+active\n-cancelled"];
+    11[label="+active\n+cancelled"];
+    CREATE[shape="box",style="bold"];
+    DELETE[shape="box",style="bold"];
+
+    CREATE->00[penwidth=3,arrowType="vee"];
+    00->10[label="signup self"];
+    10->00[label="signup other"];
+    10->11[label="cancel"];
+    11->10[label="signup self"];
+    00->01[label="cancel"];
+    11->01[label="signup other"];
+    01->DELETE[penwidth=3,arrowType="vee"];
+}

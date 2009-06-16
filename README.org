@@ -75,8 +75,23 @@ payments.
    - =subscription= - foreign key relation to =Subscription= model,
      specifies kind of subscription =user= is subscribed to;
    - =expires= - expiry date (if null, subscription never expires)
-   - =IPN= - foreign key to =paypal.standard.IPN= model, pointing to
-     payment related to last extension of subscription.
+   - =active= - boolean, True if subscription is active
+   - =cancelled= - boolean, True if subscription was cancelled
+
+   Fields =active= and =cancelled= are used for implementing the
+   subscription change flow (see later).  Every UserSubscription
+   starts with both =active= and =cancelled= set to =False=.  When
+   PayPal subscription is confirmed, =active= is set to True.  When
+   any other PayPal subscription for the same user is confirmed,
+   =active= is set to =False= (because =active= is set to =True= for
+   this other subscription, in other UserSubscription instance).  When
+   subscription is cancelled at PayPal, =cancelled= is set to =True=.
+   When UserSubscription is cancelled and not active, it is deleted.
+   When UserSubscription has expired and is cancelled, it is deleted.
+   Transition graph of these state bits can be found in
+   file:docs/usersubscription-states.dot.png (GraphViz source in
+   file:docs/usersubscription-states.dot).
+
    Class field =grace_timedelta= is provided (read-only) and contains
    effective value of =SUBSCRIPTION_GRACE_PERIOD= setting as
    =datetime.timedelta= object.
@@ -258,13 +273,14 @@ payments.
   - user clicks in PayPal subscribe button displayed on subscription
     detail page and subscribes at PayPal,
   - subscr_payment extends the UserSubscription,
-  - subscr_signup makes the UserSubscription active and adds user to group,
+  - subscr_signup makes the UserSubscription active and uncancelled
+    and adds user to group,
   - whichever of those got called first, creates the UserSubscription.
 
   Cancel flow is:
   - user cancels subscription at PayPal,
-  - UserSubscription is active, so it is kept and stays valid until
-    expiry.
+  - UserSubscription is active, so it is marked cancelled, kept and
+    stays valid until expiry.
 
   Subscription change flow is:
   - If user is allowed to change subscription, subscription detail page
@@ -276,12 +292,12 @@ payments.
     PayPal,
   - user cancels old subscription at PayPal;
   - whichever of subscr_payment or subscr_signup gets called first,
-    creates new, inactive UserSubscription instance,
+    creates new, inactive, uncancelled UserSubscription instance,
   - subscr_payment extends new UserSubscription instance for next
     billing period,
   - subscr_signup deactivates all active UserSubscriptions and removes
-    user from group; then, activates new UserSubscription and adds
-    user to its subscription's group,
+    user from group; then, activates and uncancels new
+    UserSubscription and adds user to its subscription's group,
   - subscr_cancel (which gets called after previous two, because user
     needs some time to click through the PayPal forms) finds inactive
     UserSubscription, ensures that user is really not member of group,
@@ -289,7 +305,7 @@ payments.
 
   If user makes a mistake and cancels new subscription instead of the
   old one, new subscription goes through "Cancel flow" above, does not
-  get deleted, so user has chance to fix things at PayPal.  User
+  get deleted, so user has chance to fix things at PayPal.  Project
   should add =signals.unsubscribed= handler that would detect such
   situation (if =usersubscription= parameter is active, and user has
   inactive UserSubscription objects, cancel was probably a mistake)

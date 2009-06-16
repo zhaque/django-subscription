@@ -90,6 +90,7 @@ class UserSubscription(models.Model):
     subscription = models.ForeignKey(Subscription)
     expires = models.DateField(null = True, default=datetime.date.today)
     active = models.BooleanField(default=True)
+    cancelled = models.BooleanField(default=True)
 
     objects = models.Manager()
     active_objects = ActiveUSManager()
@@ -139,6 +140,11 @@ class UserSubscription(models.Model):
                 Transaction(user=self.user, subscription=self.subscription, ipn=None,
                             event='subscription expired'
                             ).save()
+                if self.cancelled:
+                    self.delete()
+                    Transaction(user=self.user, subscription=self.subscription, ipn=None,
+                                event='remove subscription (expired)'
+                                ).save()
             else: self.subscribe()
 
     def extend(self, timedelta=None):
@@ -191,14 +197,10 @@ def unsubscribe_expired():
     """Unsubscribes all users whose subscription has expired.
 
     Loops through all UserSubscription objects with `expires' field
-    earlier than datetime.date.today() - SUBSCRIPTION_GRACE_PERIOD,
-    and unsubscribes user."""
-    for us in UserSubscription.objects.get(
-          expires__lt=datetime.date.today() - UserSubscription.grace_timedelta):
-        us.unsubscribe()
-        Transaction(user=us.user, subscription=us.subscription, ipn=None,
-                    event='subscription expired'
-                    ).save()
+    earlier than datetime.date.today() and forces correct group
+    membership."""
+    for us in UserSubscription.objects.get(expires__lt=datetime.date.today()):
+        us.fix()
 
 #### Handle PayPal signals
 
@@ -270,18 +272,26 @@ def handle_subscription_signup(sender, **kwargs):
     us = _ipn_usersubscription(sender)
     u, s = us.user, us.subscription
     if us:
-        # deactivate all old subscriptions
-        for old_us in u.usersubscription_set.filter(active=True).all():
-            old_us.active = False
-            old_us.unsubscribe()
-            old_us.save()
-            Transaction(user=u, subscription=s, ipn=sender,
-                        event='deactivated', amount=sender.mc_gross
-                        ).save()
+        # deactivate or delete all user's other subscriptions
+        for old_us in u.usersubscription_set.all():
+            if old_us==us: next     # don't touch current subscription
+            if old_us.cancelled:
+                old_us.delete()
+                Transaction(user=u, subscription=s, ipn=sender,
+                            event='remove subscription (deactivated)', amount=sender.mc_gross
+                            ).save()
+            else:
+                old_us.active = False
+                old_us.unsubscribe()
+                old_us.save()
+                Transaction(user=u, subscription=s, ipn=sender,
+                            event='deactivated', amount=sender.mc_gross
+                            ).save()
 
         # activate new subscription
         us.subscribe()
         us.active = True
+        us.cancelled = False
         us.save()
         Transaction(user=u, subscription=s, ipn=sender,
                     event='activated', amount=sender.mc_gross
@@ -305,9 +315,11 @@ def handle_subscription_cancel(sender, **kwargs):
             us.unsubscribe()
             us.delete()
             Transaction(user=u, subscription=s, ipn=sender,
-                        event='remove subscription', amount=sender.mc_gross
+                        event='remove subscription (cancelled)', amount=sender.mc_gross
                         ).save()
         else:
+            us.cancelled = True
+            us.save()
             Transaction(user=u, subscription=s, ipn=sender,
                         event='cancel subscription', amount=sender.mc_gross
                         ).save()
