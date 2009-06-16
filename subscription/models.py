@@ -175,6 +175,7 @@ class UserSubscription(models.Model):
         reason to display.
         """
         if self.subscription == subscription:
+            if self.active and self.cancelled: return None # allow resubscribing
             return [ u'This is your current subscription.' ]
         return [
             res[1]
