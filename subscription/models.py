@@ -287,7 +287,7 @@ def handle_subscription_signup(sender, **kwargs):
     if us:
         # deactivate or delete all user's other subscriptions
         for old_us in u.usersubscription_set.all():
-            if old_us==us: next     # don't touch current subscription
+            if old_us==us: continue     # don't touch current subscription
             if old_us.cancelled:
                 old_us.delete()
                 Transaction(user=u, subscription=s, ipn=sender,
