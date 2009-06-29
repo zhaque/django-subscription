@@ -1,0 +1,54 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2009-06-29 17:50+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: models.py:42
+msgid "No recurrence"
+msgstr ""
+
+#: models.py:43
+msgid "Day"
+msgstr ""
+
+#: models.py:44
+msgid "Week"
+msgstr ""
+
+#: models.py:45
+msgid "Month"
+msgstr ""
+
+#: models.py:46
+msgid "Year"
+msgstr ""
+
+#: models.py:82
+#, python-format
+msgid "%(price).02f / %(unit)s"
+msgid_plural "%(price).02f / %(period)d %(unit_plural)s"
+msgstr[0] ""
+msgstr[1] ""
+
+#: models.py:90
+#, python-format
+msgid "%(price).02f one-time fee"
+msgstr ""
+
+#: models.py:188
+msgid "This is your current subscription."
+msgstr ""
