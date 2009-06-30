@@ -81,7 +81,7 @@ class Subscription(models.Model):
         elif self.recurrence_period:
             return ungettext('%(price).02f / %(unit)s',
                              '%(price).02f / %(period)d %(unit_plural)s',
-                             period) % {
+                             self.recurrence_period) % {
                 'price':self.price,
                 'unit':self.get_recurrence_unit_display(),
                 'unit_plural':_(self._PLURAL_UNITS[self.recurrence_unit],),
