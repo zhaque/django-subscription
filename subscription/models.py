@@ -283,7 +283,8 @@ def handle_payment_was_successful(sender, **kwargs):
 ipn.signals.payment_was_successful.connect(handle_payment_was_successful)
 
 def handle_payment_was_flagged(sender, **kwargs):
-    s, u = _ipn_usersubscription(sender)
+    us = _ipn_usersubscription(sender)
+    u, s = us.user, us.subscription
     Transaction(user=u, subscription=s, ipn=sender,
                 event='payment flagged', amount=sender.mc_gross
                 ).save()
@@ -322,7 +323,7 @@ def handle_subscription_signup(sender, **kwargs):
         signals.subscribed.send(s, ipn=sender, subscription=s, user=u,
                                 usersubscription=us)
     else:
-        Transaction(user=u, subscription=u, ipn=sender,
+        Transaction(user=u, subscription=s, ipn=sender,
                     event='unexpected subscription', amount=sender.mc_gross
                     ).save()
         signals.event.send(s, ipn=sender, subscription=s, user=u,
@@ -347,7 +348,8 @@ def handle_subscription_cancel(sender, **kwargs):
                         ).save()
         signals.unsubscribed.send(s, ipn=sender, subscription=s, user=u,
                                   usersubscription=us,
-                                  refund=refund, reason='cancel')
+#                                  refund=refund, reason='cancel')
+                                  reason='cancel')
     else:
         Transaction(user=u, subscription=s, ipn=sender,
                     event='unexpected cancel', amount=sender.mc_gross
