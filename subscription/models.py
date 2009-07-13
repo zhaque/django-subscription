@@ -3,6 +3,7 @@ import datetime
 from django.conf import settings
 from django.db import models
 from django.contrib import auth
+from django.utils.translation import ugettext as _, ungettext, ugettext_lazy
 
 from paypal.standard import ipn
 
@@ -38,12 +39,19 @@ class Subscription(models.Model):
     price = models.DecimalField(max_digits=64, decimal_places=2)
     recurrence_period = models.PositiveIntegerField(null=True, blank=True)
     recurrence_unit = models.CharField(max_length=1, null=True,
-                                       choices = ((None, "No recurrence"),
-                                                  ('D', 'Day'),
-                                                  ('W', 'Week'),
-                                                  ('M', 'Month'),
-                                                  ('Y', 'Year')))
+                                       choices = ((None, ugettext_lazy("No recurrence")),
+                                                  ('D', ugettext_lazy('Day')),
+                                                  ('W', ugettext_lazy('Week')),
+                                                  ('M', ugettext_lazy('Month')),
+                                                  ('Y', ugettext_lazy('Year'))))
     group = models.OneToOneField(auth.models.Group)
+
+    _PLURAL_UNITS = {
+        'D': 'days',
+        'W': 'weeks',
+        'M': 'months',
+        'Y': 'years',
+        }
 
     class Meta:
         ordering = ('price','-recurrence_period')
@@ -71,14 +79,15 @@ class Subscription(models.Model):
     def get_pricing_display(self):
         if not self.price: return u'Free'
         elif self.recurrence_period:
-            if self.recurrence_period == 1:
-                return '%.02f / %s' % (self.price,
-                                       self.get_recurrence_unit_display())
-            else:
-                return '%.02f / %s %s' % (self.price,
-                                          self.recurrence_period,
-                                          self.get_recurrence_unit_display())
-        else: return '%.02f one-time fee' % self.price
+            return ungettext('%(price).02f / %(unit)s',
+                             '%(price).02f / %(period)d %(unit_plural)s',
+                             self.recurrence_period) % {
+                'price':self.price,
+                'unit':self.get_recurrence_unit_display(),
+                'unit_plural':_(self._PLURAL_UNITS[self.recurrence_unit],),
+                'period':self.recurrence_period,
+                }
+        else: return _('%(price).02f one-time fee') % { 'price':self.price }
 
 # add User.get_subscription() method
 def __user_get_subscription(user):
@@ -186,7 +195,7 @@ class UserSubscription(models.Model):
         """
         if self.subscription == subscription:
             if self.active and self.cancelled: return None # allow resubscribing
-            return [ u'This is your current subscription.' ]
+            return [ _(u'This is your current subscription.') ]
         return [
             res[1]
             for res in signals.change_check.send(
