@@ -80,6 +80,16 @@ class Subscription(models.Model):
                                           self.get_recurrence_unit_display())
         else: return '%.02f one-time fee' % self.price
 
+# add User.get_subscription() method
+def __user_get_subscription(user):
+    if not hasattr(user, '_subscription_cache'):
+        sl = Subscription.objects.filter(group__in=user.groups.all())[:1]
+        if sl: user._subscription_cache = sl[0]
+        else: user._subscription_cache = None
+    return user._subscription_cache
+auth.models.User.add_to_class('get_subscription', __user_get_subscription)
+
+
 class ActiveUSManager(models.Manager):
     """Custom Manager for UserSubscription that returns only live US objects."""
     def get_query_set(self):
