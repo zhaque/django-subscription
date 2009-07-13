@@ -42,15 +42,8 @@ def _paypal_form_args(upgrade_subscription=False, **kwargs):
                **kwargs)
     return rv
 
-def _paypal_form(subscription, user, discount=None, upgrade_subscription=False):
+def _paypal_form(subscription, user, upgrade_subscription=False):
     if not user.is_authenticated: return None
-#discount     if discount is None: trial = {}
-#discount     else:
-#discount         if discount>=subscription.price: a1=0
-#discount         else: a1 = subscription.price - discount
-#discount         trial = dict(a1=a1,
-#discount                      p1=subscription.recurrence_period,
-#discount                      t1=subscription.recurrence_unit)
 
     if subscription.recurrence_unit:
         return PayPalForm(
@@ -66,7 +59,7 @@ def _paypal_form(subscription, user, discount=None, upgrade_subscription=False):
                 src=1,                  # make payments recur
                 sra=1,            # reattempt payment on payment error
                 upgrade_subscription=upgrade_subscription,
-#discount                 **trial
+                modify=upgrade_subscription and 2 or 0, # subscription modification (upgrade/downgrade)
                 ),
             button_type='subscribe'
             )
@@ -94,20 +87,14 @@ def subscription_detail(request, object_id):
             active=True)
     except UserSubscription.DoesNotExist:
         change_denied_reasons = None
-        discount = None
         us = None
     else:
         change_denied_reasons = us.try_change(s)
-        discount = None                 #discount
-#discount         unused_days = (us.expires - datetime.date.today()).days
-#discount         discount = decimal.Decimal(
-#discount             '%.02f'%(unused_days * us.subscription.price_per_day()))
 
-
-
-    if change_denied_reasons: form = discount = None
+    if change_denied_reasons:
+        form = None
     else:
-        form = _paypal_form(s, request.user, discount,
+        form = _paypal_form(s, request.user,
                             upgrade_subscription=(us is not None) and (us.subscription<>s))
 
     try: s_us = request.user.usersubscription_set.get(subscription=s)
@@ -117,4 +104,4 @@ def subscription_detail(request, object_id):
         request, template='subscription/subscription_detail.html',
         extra_context=dict(object=s, usersubscription=s_us,
                            change_denied_reasons=change_denied_reasons,
-                           form=form, discount=discount, cancel_url=cancel_url))
+                           form=form, cancel_url=cancel_url))
