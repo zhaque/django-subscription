@@ -369,8 +369,31 @@ ipn.signals.subscription_eot.connect(handle_subscription_cancel)
 def handle_subscription_modify(sender, **kwargs):
     us = _ipn_usersubscription(sender)
     u, s = us.user, us.subscription
-    Transaction(user=u, subscription=s, ipn=sender,
-                event='modify subscription', amount=sender.mc_gross
-                ).save()
-    signals.event.send(s, ipn=sender, subscription=s, user=u, event='subscription_modify')
+    print 'modify', u, s
+    if us:
+        # delete all user's other subscriptions
+        for old_us in u.usersubscription_set.all():
+            if old_us==us: continue     # don't touch current subscription
+            old_us.delete()
+            Transaction(user=u, subscription=s, ipn=sender,
+                        event='remove subscription (deactivated)', amount=sender.mc_gross
+                        ).save()
+
+        # activate new subscription
+        us.subscribe()
+        us.active = True
+        us.cancelled = False
+        us.save()
+        Transaction(user=u, subscription=s, ipn=sender,
+                    event='activated', amount=sender.mc_gross
+                    ).save()
+
+        signals.subscribed.send(s, ipn=sender, subscription=s, user=u,
+                                usersubscription=us)
+    else:
+        Transaction(user=u, subscription=u, ipn=sender,
+                    event='unexpected subscription modify', amount=sender.mc_gross
+                    ).save()
+        signals.event.send(s, ipn=sender, subscription=s, user=u,
+                           event='unexpected_subscription_modify')
 ipn.signals.subscription_modify.connect(handle_subscription_modify)
