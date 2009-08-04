@@ -33,17 +33,25 @@ _recurrence_unit_days = {
     'Y' : 365.2425,                     # http://en.wikipedia.org/wiki/Year#Calendar_year
     }
 
+_TIME_UNIT_CHOICES=(
+    ('D', ugettext_lazy('Day')),
+    ('W', ugettext_lazy('Week')),
+    ('M', ugettext_lazy('Month')),
+    ('Y', ugettext_lazy('Year')),
+    )
+
 class Subscription(models.Model):
     name = models.CharField(max_length=100, unique=True, null=False)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=64, decimal_places=2)
+    trial_period = models.PositiveIntegerField(null=True, blank=True)
+    trial_unit = models.CharField(max_length=1, null=True,
+                                       choices = ((None, ugettext_lazy("No trial")),)
+                                       + _TIME_UNIT_CHOICES)
     recurrence_period = models.PositiveIntegerField(null=True, blank=True)
     recurrence_unit = models.CharField(max_length=1, null=True,
-                                       choices = ((None, ugettext_lazy("No recurrence")),
-                                                  ('D', ugettext_lazy('Day')),
-                                                  ('W', ugettext_lazy('Week')),
-                                                  ('M', ugettext_lazy('Month')),
-                                                  ('Y', ugettext_lazy('Year'))))
+                                       choices = ((None, ugettext_lazy("No recurrence")),)
+                                       + _TIME_UNIT_CHOICES)
     group = models.OneToOneField(auth.models.Group)
 
     _PLURAL_UNITS = {
@@ -88,6 +96,18 @@ class Subscription(models.Model):
                 'period':self.recurrence_period,
                 }
         else: return _('%(price).02f one-time fee') % { 'price':self.price }
+
+    def get_trial_display(self):
+        if self.trial_period:
+            return ungettext('One %(unit)s',
+                             '%(period)d %(unit_plural)s',
+                             self.trial_period) % {
+                'unit':self.get_trial_unit_display().lower(),
+                'unit_plural':_(self._PLURAL_UNITS[self.trial_unit],),
+                'period':self.trial_period,
+                }
+        else:
+            return _("No trial")
 
 # add User.get_subscription() method
 def __user_get_subscription(user):

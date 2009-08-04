@@ -5,9 +5,10 @@ from django.utils.html import conditional_escape as esc
 from models import Subscription, UserSubscription, Transaction
 
 def _pricing(sub): return sub.get_pricing_display()
+def _trial(sub): return sub.get_trial_display()
 
 class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('name', _pricing)
+    list_display = ('name', _pricing, _trial)
 admin.site.register(Subscription, SubscriptionAdmin)
 
 def _subscription(trans):
