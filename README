@@ -1,10 +1,5 @@
-                              Django Subscription
-                              ===================
-
-Author: Maciej Pasternacki <maciej@pasternacki.net>
-Date: 2009/06/16 23:05:56
-
-
+Django Subscription
+===================
 
 Django-subscription is an application for handling PayPal-based pay
 subscriptions. Module does not handle explicit permissions; instead,
