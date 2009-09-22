@@ -5,6 +5,7 @@ import views
 urlpatterns = patterns('subscription.views',
     (r'^$', 'subscription_list', {}, 'subscription_list'),
     (r'^(?P<object_id>\d+)/$', 'subscription_detail', {}, 'subscription_detail'),
+    (r'^(?P<object_id>\d+)/(?P<payment_method>(standard|pro))$', 'subscription_detail', {}, 'subscription_detail'),
     )
 
 urlpatterns += patterns('',

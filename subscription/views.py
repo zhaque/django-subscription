@@ -87,7 +87,7 @@ def subscription_list(request):
             object_list = Subscription.objects.all()))
 
 @login_required
-def subscription_detail(request, object_id):
+def subscription_detail(request, object_id, payment_method="standard"):
     s = get_object_or_404(Subscription, id=object_id)
 
     try:
@@ -105,11 +105,35 @@ def subscription_detail(request, object_id):
         form = _paypal_form(s, request.user,
                             upgrade_subscription=(us is not None) and (us.subscription<>s))
 
-    try: s_us = request.user.usersubscription_set.get(subscription=s)
-    except UserSubscription.DoesNotExist: s_us = None
-
-    return direct_to_template(
-        request, template='subscription/subscription_detail.html',
-        extra_context=dict(object=s, usersubscription=s_us,
-                           change_denied_reasons=change_denied_reasons,
-                           form=form, cancel_url=cancel_url))
+    try:
+        s_us = request.user.usersubscription_set.get(subscription=s)
+    except UserSubscription.DoesNotExist:
+        s_us = None
+        
+    from subscription.providers import PaymentMethodFactory
+    # See PROPOSALS section in providers.py
+    if payment_method == "pro":
+        domain = Site.objects.get_current().domain
+        item = {"amt": s.price,
+                "inv": "inventory",         # unique tracking variable paypal
+                "custom": "tracking",       # custom tracking variable for you
+                "cancelurl": 'http://%s%s' % (domain, reverse('subscription_cancel')),  # Express checkout cancel url
+                "returnurl": 'http://%s%s' % (domain, reverse('subscription_done'))}  # Express checkout return url
+        
+        data = {"item": item,
+                "payment_template": "payment.html",      # template name for payment
+                "confirm_template": "confirmation.html", # template name for confirmation
+                "success_url": reverse('subscription_done')}              # redirect location after success
+        
+        o = PaymentMethodFactory.factory('WebsitePaymentsPro', data=data, request=request)
+        # We return o.proceed() just because django-paypal's PayPalPro returns HttpResponse object
+        return o.proceed()
+    
+    elif payment_method == 'standard':
+        return direct_to_template(request, template='subscription/subscription_detail.html',\
+                                  extra_context=dict(object=s, usersubscription=s_us,\
+                                  change_denied_reasons=change_denied_reasons,\
+                                  form=form, cancel_url=cancel_url))
+    else:
+        #should never get here
+        raise Http404
