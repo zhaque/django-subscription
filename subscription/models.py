@@ -55,17 +55,12 @@ class Subscription(models.Model):
     group = models.OneToOneField(auth.models.Group)
 
     _PLURAL_UNITS = {
-        'D': ugettext_lazy('Days'),
-        'W': ugettext_lazy('Weeks'),
-        'M': ugettext_lazy('Months'),
-        'Y': ugettext_lazy('Years'),
+        'D': 'days',
+        'W': 'weeks',
+        'M': 'months',
+        'Y': 'years',
         }
-   _SINGLE_UNITS = {
-        'D': 'Day',
-        'W': 'Week',
-        'M': 'Month',
-        'Y': 'Year',
-        }	
+
     class Meta:
         ordering = ('price','-recurrence_period')
 
@@ -102,7 +97,6 @@ class Subscription(models.Model):
                 }
         else: return _('%(price).02f one-time fee') % { 'price':self.price }
 
-<<<<<<< HEAD
     def get_trial_display(self):
         if self.trial_period:
             return ungettext('One %(unit)s',
@@ -125,14 +119,10 @@ def __user_get_subscription(user):
 auth.models.User.add_to_class('get_subscription', __user_get_subscription)
 
 
-=======
-    def get_recurrence_unit_display(self):
-        return _(self._SINGLE_UNITS[self.recurrence_unit],)
->>>>>>> 6e64e76a82fa96a48a17d2b0e285055358f1208a
 class ActiveUSManager(models.Manager):
     """Custom Manager for UserSubscription that returns only live US objects."""
     def get_query_set(self):
-        return super(ActiveUSManager, self).get_query_set().filter(active=True)
+        return super(USManager, self).get_query_set().filter(active=True)
 
 class UserSubscription(models.Model):
     user = models.ForeignKey(auth.models.User)
@@ -339,16 +329,15 @@ def handle_subscription_signup(sender, **kwargs):
         for old_us in u.usersubscription_set.all():
             if old_us==us: continue     # don't touch current subscription
             if old_us.cancelled:
-                old_us.unsubscribe()
                 old_us.delete()
-                Transaction(user=u, subscription=old_us.subscription, ipn=sender,
+                Transaction(user=u, subscription=s, ipn=sender,
                             event='remove subscription (deactivated)', amount=sender.mc_gross
                             ).save()
             else:
                 old_us.active = False
                 old_us.unsubscribe()
                 old_us.save()
-                Transaction(user=u, subscription=old_us.subscription, ipn=sender,
+                Transaction(user=u, subscription=s, ipn=sender,
                             event='deactivated', amount=sender.mc_gross
                             ).save()
 
