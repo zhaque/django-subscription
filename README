@@ -355,7 +355,7 @@ Table of Contents
 9 Example code
 ~~~~~~~~~~~~~~
   Example usage and templates are available as `django-saas-kit'
-  project at [http://github.com/CrowdSense/django-saas-kit/]
+  project at [http://github.com/saas-kit/django-saas-kit/]
 
 10 Bugs and omissions
 ~~~~~~~~~~~~~~~~~~~~~
