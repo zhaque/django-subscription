@@ -52,7 +52,7 @@ class Subscription(models.Model):
     recurrence_unit = models.CharField(max_length=1, null=True,
                                        choices = ((None, ugettext_lazy("No recurrence")),)
                                        + _TIME_UNIT_CHOICES)
-    group = models.OneToOneField(auth.models.Group)
+    group = models.ForeignKey(auth.models.Group, null=False, blank=False)
 
     _PLURAL_UNITS = {
         'D': 'days',
