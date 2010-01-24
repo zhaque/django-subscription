@@ -10,6 +10,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response, get_object_or_404
 from django.views.generic.list_detail import object_list
 from django.views.generic.simple import direct_to_template
+from django.dispatch import Signal
 
 _formclass = getattr(settings, 'SUBSCRIPTION_PAYPAL_FORM', 'paypal.standard.forms.PayPalPaymentsForm')
 _formclass_dot = _formclass.rindex('.')
@@ -17,6 +18,8 @@ _formclass_module = __import__(_formclass[:_formclass_dot], {}, {}, [''])
 PayPalForm = getattr(_formclass_module, _formclass[_formclass_dot+1:])
 
 from models import Subscription, UserSubscription
+
+get_paypal_extra_args = Signal(providing_args=['user', 'subscription', 'extra_args'])
 
 # http://paypaldeveloper.com/pdn/board/message?board.id=basicpayments&message.id=621
 if settings.PAYPAL_TEST:
@@ -42,7 +45,7 @@ def _paypal_form_args(upgrade_subscription=False, **kwargs):
                **kwargs)
     return rv
 
-def _paypal_form(subscription, user, upgrade_subscription=False):
+def _paypal_form(subscription, user, upgrade_subscription=False, **extra_args):
     if not user.is_authenticated: return None
 
     if subscription.recurrence_unit:
@@ -54,6 +57,9 @@ def _paypal_form(subscription, user, upgrade_subscription=False):
                 'p1': subscription.trial_period,
                 't1': subscription.trial_unit,
                 }
+        kwargs = {}
+        kwargs.update(trial)
+        kwargs.update(extra_args)
         return PayPalForm(
             initial = _paypal_form_args(
                 cmd='_xclick-subscriptions',
@@ -68,7 +74,7 @@ def _paypal_form(subscription, user, upgrade_subscription=False):
                 sra=1,            # reattempt payment on payment error
                 upgrade_subscription=upgrade_subscription,
                 modify=upgrade_subscription and 2 or 0, # subscription modification (upgrade/downgrade)
-                **trial),
+                **kwargs),
             button_type='subscribe'
             )
     else:
@@ -102,6 +108,8 @@ def subscription_detail(request, object_id, payment_method="standard"):
     if change_denied_reasons:
         form = None
     else:
+        extra_args = {}
+        get_paypal_extra_args.send(sender=None, user=user, subscription=s, extra_args={})
         form = _paypal_form(s, request.user,
                             upgrade_subscription=(us is not None) and (us.subscription<>s))
 
