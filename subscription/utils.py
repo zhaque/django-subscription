@@ -1,4 +1,5 @@
 import datetime
+import calendar
 
 def extend_date_by(date, amount, unit):
     """Extend date `date' by `amount' of time units `unit'.
@@ -53,6 +54,9 @@ def extend_date_by(date, amount, unit):
         y += m / 12
         m %= 12
         if not m: m, y = 12, y-1
+        r = calendar.monthrange(y, m)[1]
+        if d > r:
+            d = r
         return datetime.date(y, m, d)
     elif unit == 'Y':
         y, m, d = date.year, date.month, date.day
