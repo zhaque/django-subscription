@@ -7,9 +7,13 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.http import HttpResponseRedirect
-from django.shortcuts import render_to_response, get_object_or_404
-from django.views.generic.list_detail import object_list
-from django.views.generic.simple import direct_to_template
+from django.shortcuts import render, render_to_response, get_object_or_404
+import django
+if django.VERSION <= (1, 4, 3):
+    from django.views.generic.list_detail import object_list
+    from django.views.generic.simple import direct_to_template
+else:
+    from django.views.generic import TemplateView
 from django.dispatch import Signal
 
 _formclass = getattr(settings, 'SUBSCRIPTION_PAYPAL_FORM', 'paypal.standard.forms.PayPalPaymentsForm')
@@ -97,13 +101,13 @@ def subscription_detail(request, object_id, payment_method="standard"):
     s = get_object_or_404(Subscription, id=object_id)
 
     try:
-        us = request.user.usersubscription_set.get(
+        user = request.user.usersubscription_set.get(
             active=True)
     except UserSubscription.DoesNotExist:
         change_denied_reasons = None
-        us = None
+        user = None
     else:
-        change_denied_reasons = us.try_change(s)
+        change_denied_reasons = user.try_change(s)
 
     if change_denied_reasons:
         form = None
@@ -111,13 +115,13 @@ def subscription_detail(request, object_id, payment_method="standard"):
         extra_args = {}
         get_paypal_extra_args.send(sender=None, user=user, subscription=s, extra_args={})
         form = _paypal_form(s, request.user,
-                            upgrade_subscription=(us is not None) and (us.subscription<>s))
+                            upgrade_subscription=(user is not None) and (user.subscription<>s))
 
     try:
         s_us = request.user.usersubscription_set.get(subscription=s)
     except UserSubscription.DoesNotExist:
         s_us = None
-        
+
     from subscription.providers import PaymentMethodFactory
     # See PROPOSALS section in providers.py
     if payment_method == "pro":
@@ -127,21 +131,24 @@ def subscription_detail(request, object_id, payment_method="standard"):
                 "custom": "tracking",       # custom tracking variable for you
                 "cancelurl": 'http://%s%s' % (domain, reverse('subscription_cancel')),  # Express checkout cancel url
                 "returnurl": 'http://%s%s' % (domain, reverse('subscription_done'))}  # Express checkout return url
-        
+
         data = {"item": item,
                 "payment_template": "payment.html",      # template name for payment
                 "confirm_template": "confirmation.html", # template name for confirmation
                 "success_url": reverse('subscription_done')}              # redirect location after success
-        
+
         o = PaymentMethodFactory.factory('WebsitePaymentsPro', data=data, request=request)
         # We return o.proceed() just because django-paypal's PayPalPro returns HttpResponse object
         return o.proceed()
-    
+
     elif payment_method == 'standard':
-        return direct_to_template(request, template='subscription/subscription_detail.html',\
-                                  extra_context=dict(object=s, usersubscription=s_us,\
-                                  change_denied_reasons=change_denied_reasons,\
-                                  form=form, cancel_url=cancel_url))
+        template_vars = { 'object': s,
+                          'usersubscription': s_us,
+                          'change_denied_reasons': change_denied_reasons,
+                          'form': form,
+                          'cancel_url': cancel_url }
+        template = 'subscription/subscription_detail.html'
+        return render(request, template, template_vars)
     else:
         #should never get here
         raise Http404
