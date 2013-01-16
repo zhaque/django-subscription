@@ -12,18 +12,22 @@ class SubscriptionAdmin(admin.ModelAdmin):
 admin.site.register(Subscription, SubscriptionAdmin)
 
 def _subscription(trans):
-    return u'<a href="/admin/subscription/subscription/%d/">%s</a>' % (
-        trans.subscription.pk, esc(trans.subscription) )
+    print 22222, trans.subscription
+    if trans.subscription != None:
+        return u'<a href="/admin/subscription/subscription/%d/">%s</a>' % (
+            trans.subscription.pk, esc(trans.subscription) )
 _subscription.allow_tags = True
 
 def _user(trans):
-    return u'<a href="/admin/auth/user/%d/">%s</a>' % (
-        trans.user.pk, esc(trans.user) )
+    if trans.user != None:
+        return u'<a href="/admin/auth/user/%d/">%s</a>' % (
+            trans.user.pk, esc(trans.user) )
 _user.allow_tags = True
 
 def _ipn(trans):
-    return u'<a href="/admin/ipn/paypalipn/%d/">#%s</a>' % (
-        trans.ipn.pk, trans.ipn.pk )
+    if trans.ipn != None:
+        return u'<a href="/admin/ipn/paypalipn/%d/">#%s</a>' % (
+            trans.ipn.pk, trans.ipn.pk )
 _ipn.allow_tags = True
 
 class UserSubscriptionAdminForm(forms.ModelForm):
