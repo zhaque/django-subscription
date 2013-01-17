@@ -52,7 +52,7 @@ class Subscription(models.Model):
     recurrence_unit = models.CharField(max_length=1, null=True,
                                        choices = ((None, ugettext_lazy("No recurrence")),)
                                        + _TIME_UNIT_CHOICES)
-    group = models.ForeignKey(auth.models.Group, null=False, blank=False)
+    group = models.ForeignKey(auth.models.Group, null=False, blank=False, unique=False)
 
     _PLURAL_UNITS = {
         'D': 'days',
@@ -265,7 +265,7 @@ def _ipn_usersubscription(payment):
             Transaction(user=u, subscription=s, ipn=payment,
                         event='new usersubscription', amount=payment.mc_gross
                         ).save()
-    else: us = PseudoUS(user=u,subscription=s) 
+    else: us = PseudoUS(user=u,subscription=s)
 
     return us
 
