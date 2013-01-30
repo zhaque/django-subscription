@@ -9,7 +9,7 @@ from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import render, render_to_response, get_object_or_404
 import django
-if django.VERSION <= (1, 4, 3):
+if django.VERSION <= (1, 5, 0):
     from django.views.generic.list_detail import object_list
     from django.views.generic.simple import direct_to_template
 else:
