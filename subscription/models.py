@@ -57,6 +57,7 @@ class Subscription(models.Model):
     group = models.ForeignKey(auth.models.Group, null=False, blank=False, unique=False)
 
     _PLURAL_UNITS = {
+        '0': ugettext_lazy('No trial'),
         'D': 'days',
         'W': 'weeks',
         'M': 'months',
