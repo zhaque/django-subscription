@@ -4,8 +4,8 @@ import django
 
 if django.VERSION < (1, 5, 0):
     import views
-    urlpatterns = patterns('subscriptions.views',
-        (r'^$', 'subscription_list', {}, 'subscription_list'),
+    urlpatterns = patterns('',
+        (r'^$', 'subscription.views.subscription_list', {}, 'subscription_list'),
         (r'^done/', 'django.views.generic.simple.direct_to_template',
             dict(template='subscription/subscription_done.html'), 'subscription_done'),
         (r'^change-done/', 'django.views.generic.simple.direct_to_template',
@@ -15,6 +15,7 @@ if django.VERSION < (1, 5, 0):
             dict(template='subscription/subscription_cancel.html'), 'subscription_cancel'),
     )
 else:
+    print "2"
     from django.views.generic import TemplateView
     urlpatterns = patterns('subscription.views',
         url(r'^$', TemplateView.as_view(template_name='subscription/subscription_list.html'), name='subscription_list'),
