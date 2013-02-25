@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.sites.models import Site
 from django.core.urlresolvers import reverse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404
 from django.dispatch import Signal
 
@@ -103,8 +103,12 @@ def subscription_list(request):
         extra_context=dict(object_list=Subscription.objects.all()))
 
 
-@login_required
 def subscription_detail(request, object_id, payment_method="standard"):
+
+    FREE_SUBSCRIPTION_URL_NAME = getattr(settings, 'FREE_SUBSCRIPTION_URL_NAME', None)
+    if FREE_SUBSCRIPTION_URL_NAME:
+        return redirect(reverse(FREE_SUBSCRIPTION_URL_NAME))
+
     s = get_object_or_404(Subscription, id=object_id)
 
     try:

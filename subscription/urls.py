@@ -15,7 +15,6 @@ if django.VERSION < (1, 5, 0):
             dict(template='subscription/subscription_cancel.html'), 'subscription_cancel'),
     )
 else:
-    print "2"
     from django.views.generic import TemplateView
     urlpatterns = patterns('subscription.views',
         url(r'^$', TemplateView.as_view(template_name='subscription/subscription_list.html'), name='subscription_list'),
